@@ -393,8 +393,8 @@ async function generateImages(story, setting, creature) {
             prompt = `${basePrompt}, happy celebration, sparkles, children storybook illustration, joyful scene`;
         }
 
-        const encodedPrompt = encodeURIComponent(prompt);
-        let imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=640&nologo=true&seed=${Math.floor(Math.random() * 100000)}`;
+        const seed = Math.floor(Math.random() * 100000);
+        let imageUrl = `https://gen.pollinations.ai/image/${encodedPrompt}?model=flux&seed=${seed}`;
 
         if (apiKey) {
             imageUrl += `&key=${apiKey}`;
