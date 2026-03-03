@@ -172,7 +172,8 @@ Output ONLY valid JSON, no other text.`;
         const response = await fetch('https://gen.pollinations.ai/v1/chat/completions', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`
             },
             body: JSON.stringify(requestBody)
         });
@@ -394,6 +395,7 @@ async function generateImages(story, setting, creature) {
         }
 
         const seed = Math.floor(Math.random() * 100000);
+        const encodedPrompt = encodeURIComponent(prompt);
         let imageUrl = `https://gen.pollinations.ai/image/${encodedPrompt}?model=flux&seed=${seed}`;
 
         if (apiKey) {
