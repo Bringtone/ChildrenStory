@@ -1,4 +1,3 @@
-
 /* Fantasy Story Generator - Kid-Friendly Styles */
 
 :root {
@@ -201,6 +200,62 @@ main {
 .btn-secondary:hover {
     background: var(--secondary);
     color: white;
+}
+
+/* API Key Section */
+.api-key-section {
+    margin-top: 20px;
+    padding-top: 15px;
+    border-top: 1px dashed rgba(155, 89, 182, 0.3);
+    text-align: left;
+}
+
+.api-key-section label {
+    display: block;
+    font-size: 0.9rem;
+    color: var(--text-light);
+    margin-bottom: 8px;
+    font-weight: 600;
+}
+
+.api-key-section .optional {
+    font-weight: 400;
+    font-style: italic;
+    opacity: 0.8;
+}
+
+.api-key-section input {
+    width: 100%;
+    padding: 10px 14px;
+    font-size: 0.9rem;
+    border: 2px solid rgba(155, 89, 182, 0.2);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.8);
+    transition: all 0.3s ease;
+    font-family: inherit;
+}
+
+.api-key-section input:focus {
+    outline: none;
+    border-color: var(--secondary);
+    background: white;
+    box-shadow: 0 0 0 3px rgba(155, 89, 182, 0.1);
+}
+
+.api-key-section small {
+    display: block;
+    margin-top: 6px;
+    font-size: 0.8rem;
+    color: var(--text-light);
+}
+
+.api-key-section small a {
+    color: var(--secondary);
+    text-decoration: none;
+}
+
+.api-key-section small a:hover {
+    text-decoration: underline;
 }
 
 /* Loading State */
