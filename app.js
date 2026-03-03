@@ -146,6 +146,10 @@ Rules:
 Output ONLY valid JSON, no other text.`;
 
     try {
+        // Debug: Log API key presence
+        console.log('API Key:', apiKey ? 'present' : 'missing');
+
+        // Verify key is in request body
         const requestBody = {
             model: 'openai',
             messages: [
@@ -154,11 +158,15 @@ Output ONLY valid JSON, no other text.`;
                     content: prompt
                 }
             ],
-            seed: Math.floor(Math.random() * 10000)
+            seed: Math.floor(Math.random() * 10000),
+            key: apiKey  // Add key directly to body
         };
 
-        if (apiKey) {
-            requestBody.key = apiKey;
+        console.log('Request body includes key:', !!requestBody.key);
+
+        if (!requestBody.key) {
+            alert('API key is missing! Please enter your Pollinations API key.');
+            return generateTemplateStory(name, creature, setting);
         }
 
         const response = await fetch('https://gen.pollinations.ai/v1/chat/completions', {
