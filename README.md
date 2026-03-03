@@ -118,6 +118,10 @@ The free Pollinations API has rate limits. If you hit them:
 - Safari (latest)
 - Edge (latest)
 
+## Built With
+
+- [Pollinations AI](https://pollinations.ai) - Free AI image and text generation API
+
 ## License
 
 MIT License - Feel free to use and modify!
