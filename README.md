@@ -16,7 +16,7 @@ A magical web app for children to create their own illustrated fantasy stories! 
 
 ## Demo
 
-Try it live: [here](https://bringtone.github.io/ChildrenStory/)
+Try it live: [https://your-username.github.io/fantasy-story-app/](https://your-username.github.io/fantasy-story-app/)
 
 ## Quick Start
 
