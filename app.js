@@ -15,6 +15,7 @@ const elements = {
     creature: document.getElementById('creature'),
     setting: document.getElementById('setting'),
     pagesCount: document.getElementById('pages'),
+    apiKey: document.getElementById('apiKey'),
     storyTitle: document.getElementById('story-title'),
     storyImage: document.getElementById('story-image'),
     imagePlaceholder: document.getElementById('image-placeholder'),
@@ -110,21 +111,29 @@ Format the output as a JSON array with exactly ${pageCount} items, each having a
 [{"text": "Page 1 text here..."}, {"text": "Page 2 text here..."}, {"text": "Page 3 text here..."}]`;
 
     try {
+        const apiKey = getApiKey();
+        const requestBody = {
+            model: 'openai',
+            messages: [
+                {
+                    role: 'user',
+                    content: prompt
+                }
+            ],
+            seed: Math.floor(Math.random() * 10000)
+        };
+
+        // Add API key if provided
+        if (apiKey) {
+            requestBody.key = apiKey;
+        }
+
         const response = await fetch('https://gen.pollinations.ai/v1/chat/completions', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-                model: 'openai',
-                messages: [
-                    {
-                        role: 'user',
-                        content: prompt
-                    }
-                ],
-                seed: Math.floor(Math.random() * 10000)
-            })
+            body: JSON.stringify(requestBody)
         });
 
         if (!response.ok) {
@@ -290,6 +299,7 @@ async function generateImages(story, setting, creature) {
     };
 
     const background = settingBackgrounds[setting] || 'magical place';
+    const apiKey = getApiKey();
 
     for (let i = 0; i < story.pages.length; i++) {
         const pageNum = i + 1;
@@ -297,7 +307,14 @@ async function generateImages(story, setting, creature) {
 
         // Generate image URL using Pollinations
         const encodedPrompt = encodeURIComponent(prompt);
-        story.pages[i].imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=640&nologo=true&seed=${Math.floor(Math.random() * 100000)}`;
+        let imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=640&nologo=true&seed=${Math.floor(Math.random() * 100000)}`;
+
+        // Add API key if provided
+        if (apiKey) {
+            imageUrl += `&key=${apiKey}`;
+        }
+
+        story.pages[i].imageUrl = imageUrl;
 
         // Preload image
         await preloadImage(story.pages[i].imageUrl);
@@ -427,5 +444,26 @@ function formatTitle(str) {
     return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
+// Get API key from input or localStorage
+function getApiKey() {
+    const inputKey = elements.apiKey.value.trim();
+    if (inputKey) {
+        // Save to localStorage when user enters a key
+        localStorage.setItem('pollinations_api_key', inputKey);
+        return inputKey;
+    }
+    // Try to get from localStorage
+    return localStorage.getItem('pollinations_api_key') || '';
+}
+
 // Initialize
-showSection('input');
+function init() {
+    // Load API key from localStorage if available
+    const savedKey = localStorage.getItem('pollinations_api_key');
+    if (savedKey) {
+        elements.apiKey.value = savedKey;
+    }
+    showSection('input');
+}
+
+init();
