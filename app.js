@@ -1,8 +1,10 @@
-// Fantasy Story Generator - App Logic
+// Fantasy Story Generator - Interactive Choose Your Own Adventure
 
 // State
 let currentStory = null;
-let currentPage = 0;
+let currentPageId = null;
+let choiceHistory = [];
+let isInteractive = true; // New interactive mode
 
 // DOM Elements
 const elements = {
@@ -20,6 +22,9 @@ const elements = {
     storyImage: document.getElementById('story-image'),
     imagePlaceholder: document.getElementById('image-placeholder'),
     storyText: document.getElementById('story-text'),
+    choicesContainer: document.getElementById('choices-container'),
+    choiceIndicator: document.getElementById('choice-indicator'),
+    storyNavigation: document.getElementById('story-navigation'),
     currentPageEl: document.getElementById('current-page'),
     totalPagesEl: document.getElementById('total-pages'),
     prevBtn: document.getElementById('prev-btn'),
@@ -43,20 +48,26 @@ async function handleStoryGeneration(e) {
     const name = elements.childName.value.trim();
     const creature = elements.creature.value;
     const setting = elements.setting.value;
-    const pageCount = parseInt(elements.pagesCount.value);
+    const apiKey = elements.apiKey.value.trim();
 
     if (!name) {
         alert('Please enter your name!');
         return;
     }
 
+    if (!apiKey) {
+        alert('Please enter your Pollinations API key!');
+        elements.apiKey.focus();
+        return;
+    }
+
     // Show loading
     showSection('loading');
-    updateProgress(30);
+    updateProgress(20);
 
     try {
-        // Generate story content
-        const story = await generateStory(name, creature, setting, pageCount);
+        // Generate interactive branching story
+        const story = await generateInteractiveStory(name, creature, setting, apiKey);
         updateProgress(60);
 
         // Generate images for each page
@@ -65,14 +76,14 @@ async function handleStoryGeneration(e) {
 
         // Set up story display
         currentStory = story;
-        currentPage = 0;
+        currentPageId = 'start'; // Start from the beginning
+        choiceHistory = [];
 
         // Update UI
         elements.storyTitle.textContent = `${name}'s ${formatTitle(creature)} Adventure`;
-        elements.totalPagesEl.textContent = story.pages.length;
 
         // Display first page
-        displayPage(0);
+        displayPage(currentPageId);
         updateProgress(100);
 
         setTimeout(() => {
@@ -85,8 +96,8 @@ async function handleStoryGeneration(e) {
     }
 }
 
-// Generate Story Text using Pollinations API
-async function generateStory(name, creature, setting, pageCount) {
+// Generate Interactive Branching Story
+async function generateInteractiveStory(name, creature, setting, apiKey) {
     const creatureNames = {
         dragon: 'a friendly dragon',
         unicorn: 'a magical unicorn',
@@ -98,20 +109,43 @@ async function generateStory(name, creature, setting, pageCount) {
         gryphon: 'a majestic gryphon'
     };
 
-    const prompt = `Write a ${pageCount}-page children's fantasy story about ${name} and ${creatureNames[creature]} in ${setting}.
+    const prompt = `Create a 3-5 page children's interactive fantasy story about ${name} and ${creatureNames[creature]} in ${setting}.
 
-Each page should be:
-- 2-3 sentences only (short for children)
-- Magical and adventurous
-- Age-appropriate (ages 4-8)
-- Include the child's name "${name}" in each page
-- Positive and heartwarming
+This is a CHOOSE YOUR OWN ADVENTURE story. Each page (except endings) should present 2-3 choices for the reader.
 
-Format the output as a JSON array with exactly ${pageCount} items, each having a "text" field. Example format:
-[{"text": "Page 1 text here..."}, {"text": "Page 2 text here..."}, {"text": "Page 3 text here..."}]`;
+Format as JSON with this structure:
+{
+  "start": {
+    "text": "Page 1 story text here...",
+    "choices": [
+      {"text": "Choice 1 text", "nextPage": "page2a", "imagePrompt": "image description for this branch"},
+      {"text": "Choice 2 text", "nextPage": "page2b", "imagePrompt": "image description for this branch"}
+    ]
+  },
+  "page2a": {
+    "text": "Page 2A story text...",
+    "choices": [
+      {"text": "Choice to ending 1", "nextPage": "ending1", "imagePrompt": "..."},
+      {"text": "Choice to page 3", "nextPage": "page3a", "imagePrompt": "..."}
+    ]
+  },
+  "page2b": {...},
+  "ending1": {"text": "Happy ending text!", "isEnding": true},
+  "ending2": {...},
+  ...
+}
+
+Rules:
+- Each page text: 2-3 sentences (short for children ages 4-8)
+- Include child's name "${name}" in each page
+- Make stories magical and age-appropriate
+- Create 3-5 different endings
+- Each choice leads to a different path
+- Use simple choice texts that children can understand (go left/right, talk to friend, etc.)
+
+Output ONLY valid JSON, no other text.`;
 
     try {
-        const apiKey = getApiKey();
         const requestBody = {
             model: 'openai',
             messages: [
@@ -123,7 +157,6 @@ Format the output as a JSON array with exactly ${pageCount} items, each having a
             seed: Math.floor(Math.random() * 10000)
         };
 
-        // Add API key if provided
         if (apiKey) {
             requestBody.key = apiKey;
         }
@@ -144,149 +177,190 @@ Format the output as a JSON array with exactly ${pageCount} items, each having a
         const content = data.choices[0].message.content;
 
         // Parse JSON from response
-        let pages;
         try {
-            // Try to extract JSON array from the response
-            const jsonMatch = content.match(/\[[\s\S]*\]/);
+            const jsonMatch = content.match(/\{[\s\S]*\}/);
             if (jsonMatch) {
-                pages = JSON.parse(jsonMatch[0]);
-            } else {
-                // Fallback: create simple pages from text
-                pages = createSimplePages(content, pageCount);
+                const storyTree = JSON.parse(jsonMatch[0]);
+                return {
+                    tree: storyTree,
+                    creature,
+                    setting,
+                    name
+                };
             }
         } catch (e) {
             console.log('JSON parse failed, using fallback');
-            pages = createSimplePages(content, pageCount);
         }
 
-        // Ensure we have the right number of pages
-        while (pages.length < pageCount) {
-            pages.push({ text: `${name} had more magical adventures in the ${setting}!` });
-        }
-        pages = pages.slice(0, pageCount);
-
-        return { pages, creature, setting, name };
+        // Fallback to template-based story
+        return generateTemplateStory(name, creature, setting);
 
     } catch (error) {
         console.error('Story generation error:', error);
-        // Fallback to local story generation
-        return generateLocalStory(name, creature, setting, pageCount);
+        return generateTemplateStory(name, creature, setting);
     }
 }
 
-// Fallback local story generation
-function generateLocalStory(name, creature, setting, pageCount) {
-    const stories = {
-        dragon: [
-            `${name} met a friendly dragon who loved to bake cookies! Together they went on a magical journey through the ${setting}, finding treasure everywhere they looked.`,
-            `The dragon showed ${name} its secret cave filled with glowing crystals. ${name} discovered they could sing and make the crystals dance!`,
-            `As the sun set, ${name} and the dragon had a picnic. "You are the best friend ever!" said the dragon. ${name} smiled and agreed.`,
-            `${name} waved goodbye to the dragon. "Come back tomorrow!" called the dragon. ${name} couldn't wait for their next adventure!`,
-            `That night, ${name} dreamed of flying on the dragon's back above the clouds. It was the best dream ever!`
-        ],
-        unicorn: [
-            `${name} discovered a sparkling rainbow and followed it to a meadow where a beautiful unicorn lived! The unicorn welcomed ${name} with a friendly neigh.`,
-            `The unicorn took ${name} for a ride across the magical meadow. They jumped over flower hills and splashed through rainbow rivers together!`,
-            `The unicorn showed ${name} its special garden where flowers could talk. "Hello, ${name}!" sang the flowers. ${name} was amazed!`,
-            `As evening came, the unicorn gave ${name} a gift - a tiny rainbow feather that would grant wishes. ${name} was so happy!`,
-            `${name} rode the unicorn one last time as the stars appeared. "Thank you for the best day ever!" said ${name}.`
-        ],
-        wizard: [
-            `${name} found a magic wand in the attic! When they waved it, sparks flew everywhere and a friendly wizard appeared.`,
-            `The wizard taught ${name} a simple spell - to make flowers bloom with a wave! ${name} practiced in the ${setting} and soon flowers popped up everywhere!`,
-            `Suddenly, a lost baby owl needed help finding its family. ${name} used their new magic to light the way through the ${setting}!`,
-            `The owl family was so grateful. The mother owl gave ${name} a shiny feather as a thank-you gift. ${name} felt proud!`,
-            `"You are a wonderful wizard!" said the wizard. ${name} smiled - maybe one day they'll be a real wizard too!`
-        ],
-        fairy: [
-            `${name} followed a glowing firefly into a tiny door in an old oak tree. Inside lived a friendly fairy who smiled at ${name}!`,
-            `The fairy gave ${name} a pair of tiny wings and they flew together through the ${setting}, visiting flower friends and butterfly buddies!`,
-            `Suddenly, it started to rain! The fairy used her magic to make a mushroom umbrella. ${name} stayed dry and happy!`,
-            `When the rain stopped, a beautiful rainbow appeared. ${name} and the fairy made wishes on every color they could see!`,
-            `"Come back whenever you want!" said the fairy. ${name} promised to visit soon. What a magical day!`
-        ],
-        mermaid: [
-            `${name} found a magic seashell on the beach. When they held it to their ear, they heard singing - it was a friendly mermaid calling!`,
-            `The mermaid took ${name} on a tour of her underwater kingdom. They met colorful fish, danced with dolphins, and said hello to a wise old sea turtle!`,
-            `${name} discovered a shipwreck with treasure! The mermaid helped ${name} pick a shiny pearl to take home as a souvenir.`,
-            `A friendly octopus showed ${name} how to juggle bubbles. ${name} laughed and laughed at the bubble games!`,
-            `As the sun set, the mermaid gave ${name} a beautiful seashell necklace. "Now you'll always remember our adventure!" said the mermaid.`
-        ],
-        phoenix: [
-            `${name} found a glowing egg in the forest. Suddenly it cracked open and a beautiful baby phoenix emerged! The phoenix chose ${name} as its friend!`,
-            `The phoenix showed ${name} how to fly - well, they floated on magic feathers together through the ${setting}! It was amazing!`,
-            `The phoenix lit up the sky with its warm glow. ${name} felt so happy and safe with their new magical friend.`,
-            `Other animals came to say hello - a rabbit, a deer, and even a wise old owl. ${name} made so many new friends!`,
-            `The phoenix gave ${name} a warm, glowing feather. "This will always remind you of our adventure," chirped the phoenix happily.`
-        ],
-        elf: [
-            `${name} was playing in the forest when they met a tiny elf with a big smile! "Welcome to my home!" said the elf happily.`,
-            `The elf took ${name} to see the magical tree house village in the ${setting}. Everything was made of candy and cookies!`,
-            `${name} helped the elves plant magic seeds that grew into instant flowers. The elves cheered for ${name}'s helpful hands!`,
-            `The elves invited ${name} to a party with music and dancing. Everyone had the most wonderful time together!`,
-            `"You are our special friend now!" said the elf leader. ${name} hugged the elves goodbye. What an amazing day!`
-        ],
-        gryphon: [
-            `${name} found a golden feather on the ground. Suddenly, a magnificent gryphon appeared - half lion, half eagle - and it wanted to be friends!`,
-            `The gryphon offered to take ${name} for a flight through the ${setting}. They soared over mountains and dived through clouds together!`,
-            `The gryphon showed ${name} its nest full of shiny treasures. ${name} picked a special crystal to remember their adventure.`,
-            `Other magical creatures came to meet ${name} - a wise owl, a playful squirrel, and a rainbow butterfly. What a party!`,
-            `"You are brave and kind," said the gryphon. ${name} smiled big. They'd never forget their gryphon friend!`
-        ]
+// Template-based branching story (fallback)
+function generateTemplateStory(name, creature, setting) {
+    const stories = getTemplateStory(name, creature, setting);
+    return {
+        tree: stories,
+        creature,
+        setting,
+        name
     };
-
-    const creatureStories = stories[creature] || stories.dragon;
-    const pages = [];
-
-    for (let i = 0; i < pageCount; i++) {
-        pages.push({
-            text: creatureStories[i] || `${name} had another wonderful adventure in the ${setting}!`
-        });
-    }
-
-    return { pages, creature, setting, name };
 }
 
-// Create simple pages from text fallback
-function createSimplePages(content, pageCount) {
-    // Split content into sentences and group into pages
-    const sentences = content.split(/[.!?]+/).filter(s => s.trim().length > 10);
-    const pages = [];
+function getTemplateStory(name, creature, setting) {
+    // Pre-defined branching templates
+    return {
+        "start": {
+            "text": `One magical morning, ${name} discovered a hidden path in the ${setting}. As they walked further, they met ${getCreatureIntro(creature)} who was looking for help! "Will you help me?" asked the creature.`,
+            "choices": [
+                {"text": "Yes, I'll help you!", "nextPage": "help", "imagePrompt": "brave child helping magical creature in fantasy setting"},
+                {"text": "First, tell me about yourself", "nextPage": "listen", "imagePrompt": "child listening to magical creature talking"}
+            ]
+        },
+        "help": {
+            "text": `${name} eagerly agreed to help! The creature smiled warmly. "Thank you, kind friend! I lost my magic gem somewhere in the ${setting}. Will you look for it with me?"`,
+            "choices": [
+                {"text": "Let's look near the big tree!", "nextPage": "tree", "imagePrompt": "child and creature searching near magical tree"},
+                {"text": "Let's check the sparkling cave!", "nextPage": "cave", "imagePrompt": "child and creature exploring sparkling cave"}
+            ]
+        },
+        "listen": {
+            "text": `"I'm the guardian of the ${setting}," said the creature. "I was playing with my magic gem, but it rolled away! Can you help me find it?" ${name} nodded with a smile.`,
+            "choices": [
+                {"text": "I'll help you find it!", "nextPage": "help", "imagePrompt": "child promising to help magical creature"},
+                {"text": "What does the gem look like?", "nextPage": "gem", "imagePrompt": "magical glowing gem illustration"}
+            ]
+        },
+        "gem": {
+            "text": `"It glows with rainbow colors and sparkles in the dark!" explained the creature. "It helps the ${setting} stay magical. Without it, the flowers might stop blooming!"`,
+            "choices": [
+                {"text": "Let's search the whole forest!", "nextPage": "search", "imagePrompt": "child and creature searching magical forest"},
+                {"text": "I think I know where it might be", "nextPage": "help", "imagePrompt": "child pointing confidently"}
+            ]
+        },
+        "search": {
+            "text": `${name} and the creature searched high and low through the ${setting}. They looked under mushrooms, behind rocks, and in the burrows of friendly animals!`,
+            "choices": [
+                {"text": "Keep searching near the pond", "nextPage": "pond", "imagePrompt": "child searching near magical pond"},
+                {"text": "Check the ancient ruins", "nextPage": "ruins", "imagePrompt": "child exploring ancient magical ruins"}
+            ]
+        },
+        "tree": {
+            "text": `${name} and the creature found a giant magical tree with glowing leaves! As they looked around, something sparkled at the base of the tree.`,
+            "choices": [
+                {"text": "Pick up the sparkling object!", "nextPage": "found_gem", "imagePrompt": "child discovering glowing gem"},
+                {"text": "Ask the tree if it saw anything", "nextPage": "tree_spirit", "imagePrompt": "child talking to wise magical tree"}
+            ]
+        },
+        "cave": {
+            "text": `The cave was filled with crystals of every color! As they walked inside, they heard a tiny voice. "Hello! I found something shiny!" said a little fairy.`,
+            "choices": [
+                {"text": "Ask the fairy about the gem", "nextPage": "fairy_help", "imagePrompt": "child talking to tiny fairy"},
+                {"text": "Look around the cave", "nextPage": "cave_inside", "imagePrompt": "child exploring crystal cave"}
+            ]
+        },
+        "found_gem": {
+            "text": `The rainbow gem! ${name} picked it up carefully. It pulsed with warm, magical light. "You found it!" cheered the creature. "You're a true hero!"`,
+            "choices": [
+                {"text": "Give the gem back to the creature", "nextPage": "ending_hero", "imagePrompt": "child returning gem to happy creature"}
+            ]
+        },
+        "tree_spirit": {
+            "text": `The tree rustled its leaves and spoke in a gentle voice. "The gem rolled toward the meadow where the butterflies play. Look there, kind one!"`,
+            "choices": [
+                {"text": "Go to the meadow!", "nextPage": "meadow", "imagePrompt": "child walking toward magical meadow"}
+            ]
+        },
+        "meadow": {
+            "text": `The meadow was filled with dancing butterflies of every color! In the center, sitting on a flower, was the rainbow gem, sparkling brightly!`,
+            "choices": [
+                {"text": "Carefully pick up the gem", "nextPage": "ending_hero", "imagePrompt": "child holding glowing rainbow gem"}
+            ]
+        },
+        "pond": {
+            "text": `The pond was magical - the water shimmered like liquid silver! Looking into it, ${name} saw a rainbow glow coming from beneath the water lilies.`,
+            "choices": [
+                {"text": "Reach into the water carefully", "nextPage": "ending_hero", "imagePrompt": "child reaching for gem in magical pond"},
+                {"text": "Ask the fish for help", "nextPage": "fish_help", "imagePrompt": "child talking to colorful fish"}
+            ]
+        },
+        "fish_help": {
+            "text": `A friendly orange fish swam up. "The gem is safe! I'll bring it to you!" The fish dove down and returned with the rainbow gem in its mouth!`,
+            "choices": [
+                {"text": "Thank the fish and take the gem", "nextPage": "ending_friend", "imagePrompt": "child receiving gem from fish"}
+            ]
+        },
+        "ruins": {
+            "text": `The ancient ruins were covered in magical symbols. ${name} noticed a pedestal with a rainbow glow. "The gem is here!" they shouted happily.`,
+            "choices": [
+                {"text": "Take the gem from the pedestal", "nextPage": "ending_hero", "imagePrompt": "child finding gem in ancient ruins"}
+            ]
+        },
+        "fairy_help": {
+            "text": `"I saw something shiny roll by! It went toward the rainbow bridge!" said the friendly fairy. "I'll show you the way!"`,
+            "choices": [
+                {"text": "Follow the fairy!", "nextPage": "rainbow_bridge", "imagePrompt": "child following fairy on rainbow path"}
+            ]
+        },
+        "rainbow_bridge": {
+            "text": `The fairy led ${name} and the creature to a beautiful bridge made entirely of rainbows! In the middle lay the glowing magic gem.`,
+            "choices": [
+                {"text": "Cross the bridge together", "nextPage": "ending_hero", "imagePrompt": "child and creatures crossing rainbow bridge"}
+            ]
+        },
+        "cave_inside": {
+            "text": `Deeper in the cave, ${name} found a tunnel filled with glowing crystals. At the end, something rainbow-colored sparkled!`,
+            "choices": [
+                {"text": "Go toward the sparkles!", "nextPage": "ending_hero", "imagePrompt": "child finding treasure in crystal cave"}
+            ]
+        },
+        "ending_hero": {
+            "text": `The creature was overjoyed! "You found my magic gem! The ${setting} will stay beautiful forever because of you!" ${name} felt proud and warm inside. "Thank you for the adventure!" said ${name}. And they lived happily ever after! 🌟`,
+            "isEnding": true,
+            "endingType": "hero"
+        },
+        "ending_friend": {
+            "text": `With the gem found, the ${setting} glowed with extra magic! ${name} had made wonderful new friends - the creature, the fish, and all the magical beings. "Come back anytime!" they all said. ${name} smiled, already looking forward to the next adventure! 🌈`,
+            "isEnding": true,
+            "endingType": "friendship"
+        }
+    };
+}
 
-    for (let i = 0; i < pageCount; i++) {
-        const startIdx = Math.floor((sentences.length / pageCount) * i);
-        const endIdx = Math.floor((sentences.length / pageCount) * (i + 1));
-        const pageText = sentences.slice(startIdx, endIdx).join('. ').trim();
-
-        pages.push({
-            text: pageText + (pageText && !pageText.endsWith('.') ? '.' : '')
-        });
-    }
-
-    // If not enough content, add placeholders
-    while (pages.length < pageCount) {
-        pages.push({ text: 'And then more magical things happened!' });
-    }
-
-    return pages;
+function getCreatureIntro(creature) {
+    const intros = {
+        dragon: 'a friendly dragon with sparkling scales',
+        unicorn: 'a beautiful unicorn with a rainbow mane',
+        wizard: 'a kind young wizard with a glowing staff',
+        fairy: 'a sweet fairy with glittering wings',
+        mermaid: 'a lovely mermaid with colorful scales',
+        phoenix: 'a warm phoenix with golden feathers',
+        elf: 'a cheerful elf with a pointed hat',
+        gryphon: 'a gentle gryphon with soft feathers'
+    };
+    return intros[creature] || 'a magical creature';
 }
 
 // Generate images for each page
 async function generateImages(story, setting, creature) {
     const imagePrompts = {
-        dragon: 'cute friendly cartoon dragon with big eyes, smiling, colorful scales, children storybook illustration, soft pastel colors, magical background',
-        unicorn: 'cute cartoon unicorn with rainbow mane, sparkly horn, big friendly eyes, fluffy clouds background, children storybook illustration, soft pastel colors',
-        wizard: 'cute child wizard with starry robe and hat, holding magic wand, big friendly eyes, magical sparkles around, children book illustration, soft colors',
-        fairy: 'cute cartoon fairy with butterfly wings, flower crown, smiling, sparkly dress, magical forest background, children storybook illustration',
-        mermaid: 'cute cartoon mermaid with colorful scales, flowing hair, smiling, underwater scene with bubbles, children storybook illustration, soft blue colors',
-        phoenix: 'beautiful cartoon phoenix bird with orange and gold feathers, glowing, friendly expression, magical flames, children illustration, soft warm colors',
-        elf: 'cute cartoon forest elf with pointy ears, green outfit, smiling, in magical forest, children storybook illustration, soft green colors',
-        gryphon: 'cute cartoon gryphon with lion body and eagle wings, friendly expression, big eyes, magical background, children illustration'
+        dragon: 'cute friendly cartoon dragon with big eyes, smiling, colorful scales, children storybook illustration, soft pastel colors',
+        unicorn: 'cute cartoon unicorn with rainbow mane, sparkly horn, big friendly eyes, fluffy clouds background, children storybook illustration',
+        wizard: 'cute child wizard with starry robe and hat, holding magic wand, magical sparkles around, children book illustration',
+        fairy: 'cute cartoon fairy with butterfly wings, flower crown, smiling, sparkly dress, magical forest background',
+        mermaid: 'cute cartoon mermaid with colorful scales, flowing hair, smiling, underwater with bubbles',
+        phoenix: 'beautiful cartoon phoenix bird with orange and gold feathers, glowing, friendly expression',
+        elf: 'cute cartoon forest elf with pointy ears, green outfit, smiling, in magical forest',
+        gryphon: 'cute cartoon gryphon with lion body and eagle wings, friendly expression, big eyes'
     };
 
     const basePrompt = imagePrompts[creature] || imagePrompts.dragon;
 
-    // Add setting-specific background
     const settingBackgrounds = {
         'enchanted forest': 'enchanted magical forest with glowing trees and flowers',
         'magical castle': 'fairytale castle with towers and flags',
@@ -301,23 +375,27 @@ async function generateImages(story, setting, creature) {
     const background = settingBackgrounds[setting] || 'magical place';
     const apiKey = getApiKey();
 
-    for (let i = 0; i < story.pages.length; i++) {
-        const pageNum = i + 1;
-        const prompt = `${basePrompt}, ${background}, page ${pageNum} of ${story.pages.length}, storybook illustration for children, Disney style, detailed, high quality`;
+    // Generate images for all pages in the story tree
+    for (const [pageId, pageData] of Object.entries(story.tree)) {
+        // Use provided imagePrompt from choices, or generate one from page text
+        let prompt = pageData.imagePrompt || `${basePrompt}, ${background}, storybook illustration for children`;
 
-        // Generate image URL using Pollinations
+        // If it's an ending, use a celebratory prompt
+        if (pageData.isEnding) {
+            prompt = `${basePrompt}, happy celebration, sparkles, children storybook illustration, joyful scene`;
+        }
+
         const encodedPrompt = encodeURIComponent(prompt);
         let imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=640&nologo=true&seed=${Math.floor(Math.random() * 100000)}`;
 
-        // Add API key if provided
         if (apiKey) {
             imageUrl += `&key=${apiKey}`;
         }
 
-        story.pages[i].imageUrl = imageUrl;
+        story.tree[pageId].imageUrl = imageUrl;
 
         // Preload image
-        await preloadImage(story.pages[i].imageUrl);
+        await preloadImage(story.tree[pageId].imageUrl);
     }
 }
 
@@ -332,13 +410,16 @@ function preloadImage(url) {
 }
 
 // Display a specific page
-function displayPage(pageIndex) {
-    if (!currentStory || !currentStory.pages[pageIndex]) return;
+function displayPage(pageId) {
+    if (!currentStory || !currentStory.tree[pageId]) return;
 
-    const page = currentStory.pages[pageIndex];
+    const page = currentStory.tree[pageId];
+    currentPageId = pageId;
 
-    // Update page number
-    elements.currentPageEl.textContent = pageIndex + 1;
+    // Update page counter
+    const totalVisited = choiceHistory.length + 1;
+    elements.currentPageEl.textContent = totalVisited;
+    elements.totalPagesEl.textContent = '? (adventure)';
 
     // Update text
     elements.storyText.innerHTML = `<p>${page.text}</p>`;
@@ -359,22 +440,86 @@ function displayPage(pageIndex) {
         };
     }
 
-    // Update navigation buttons
-    elements.prevBtn.disabled = pageIndex === 0;
-    elements.nextBtn.disabled = pageIndex === currentStory.pages.length - 1;
+    // Update choice indicator (show path)
+    updateChoiceIndicator();
+
+    // Show choices or ending
+    if (page.isEnding) {
+        showEnding(page);
+    } else if (page.choices && page.choices.length > 0) {
+        showChoices(page.choices);
+        elements.storyNavigation.style.display = 'none';
+    }
 
     // Add sparkle effect
     addSparkleEffect();
 }
 
-// Navigate pages
-function navigatePage(direction) {
-    const newPage = currentPage + direction;
+// Show choice buttons
+function showChoices(choices) {
+    elements.choicesContainer.innerHTML = '';
 
-    if (newPage >= 0 && newPage < currentStory.pages.length) {
-        currentPage = newPage;
-        displayPage(currentPage);
+    choices.forEach((choice, index) => {
+        const button = document.createElement('button');
+        button.className = 'choice-btn';
+        button.innerHTML = `<span class="choice-number">${index + 1}</span> ${choice.text}`;
+        button.addEventListener('click', () => makeChoice(choice));
+        elements.choicesContainer.appendChild(button);
+    });
+}
+
+// Make a choice and navigate to next page
+function makeChoice(choice) {
+    choiceHistory.push({
+        fromPage: currentPageId,
+        choiceText: choice.text,
+        toPage: choice.nextPage
+    });
+
+    displayPage(choice.nextPage);
+}
+
+// Show ending
+function showEnding(page) {
+    elements.choicesContainer.innerHTML = '';
+
+    // Add celebration message
+    const endingMessage = document.createElement('div');
+    endingMessage.className = 'ending-message';
+
+    const endings = {
+        'hero': '🏆 You were a brave hero!',
+        'friendship': '💖 You made wonderful friends!',
+        'magic': '✨ You discovered real magic!',
+        'default': '🎉 What an amazing adventure!'
+    };
+
+    endingMessage.innerHTML = `<h3>${endings[page.endingType] || endings.default}</h3>`;
+    elements.choicesContainer.appendChild(endingMessage);
+
+    // Add confetti effect
+    addConfetti();
+}
+
+// Update choice indicator showing path
+function updateChoiceIndicator() {
+    if (choiceHistory.length === 0) {
+        elements.choiceIndicator.innerHTML = '<span class="path-dot"></span>';
+        return;
     }
+
+    let html = '';
+    choiceHistory.forEach((choice, index) => {
+        html += `<span class="path-dot"></span><span class="path-line"></span>`;
+    });
+    html += '<span class="path-dot current"></span>';
+    elements.choiceIndicator.innerHTML = html;
+}
+
+// Navigate pages (for fallback mode)
+function navigatePage(direction) {
+    // In interactive mode, this is less relevant
+    // Could implement history-based navigation
 }
 
 // Add sparkle effect to story
@@ -382,10 +527,8 @@ function addSparkleEffect() {
     const container = document.querySelector('.illustration-container');
     if (!container) return;
 
-    // Remove old sparkles
     document.querySelectorAll('.sparkle').forEach(s => s.remove());
 
-    // Add new sparkles
     for (let i = 0; i < 8; i++) {
         setTimeout(() => {
             const sparkle = document.createElement('div');
@@ -397,6 +540,24 @@ function addSparkleEffect() {
 
             setTimeout(() => sparkle.remove(), 1000);
         }, i * 150);
+    }
+}
+
+// Add confetti effect for endings
+function addConfetti() {
+    const colors = ['#FFD700', '#FF69B4', '#00CED1', '#98FB98', '#FF6347', '#9370DB'];
+
+    for (let i = 0; i < 30; i++) {
+        setTimeout(() => {
+            const confetti = document.createElement('div');
+            confetti.className = 'confetti';
+            confetti.style.left = Math.random() * 100 + '%';
+            confetti.style.background = colors[Math.floor(Math.random() * colors.length)];
+            confetti.style.animationDuration = (Math.random() * 2 + 1) + 's';
+            document.body.appendChild(confetti);
+
+            setTimeout(() => confetti.remove(), 3000);
+        }, i * 100);
     }
 }
 
@@ -431,11 +592,14 @@ function updateProgress(percent) {
 // Reset app to start
 function resetApp() {
     currentStory = null;
-    currentPage = 0;
+    currentPageId = null;
+    choiceHistory = [];
     elements.storyForm.reset();
     elements.storyImage.classList.remove('loaded');
     elements.imagePlaceholder.classList.remove('hidden');
     elements.imagePlaceholder.innerHTML = '<span>🎨</span>';
+    elements.choicesContainer.innerHTML = '';
+    elements.storyNavigation.style.display = 'flex';
     showSection('input');
 }
 
@@ -448,17 +612,14 @@ function formatTitle(str) {
 function getApiKey() {
     const inputKey = elements.apiKey.value.trim();
     if (inputKey) {
-        // Save to localStorage when user enters a key
         localStorage.setItem('pollinations_api_key', inputKey);
         return inputKey;
     }
-    // Try to get from localStorage
     return localStorage.getItem('pollinations_api_key') || '';
 }
 
 // Initialize
 function init() {
-    // Load API key from localStorage if available
     const savedKey = localStorage.getItem('pollinations_api_key');
     if (savedKey) {
         elements.apiKey.value = savedKey;
