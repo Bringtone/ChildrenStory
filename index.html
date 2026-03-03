@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fantasy Story Generator ✨</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🧚 Fantasy Story Generator 🌟</h1>
+            <p class="subtitle">Create magical adventures just for you!</p>
+        </header>
+
+        <main>
+            <!-- Input Form -->
+            <div id="input-section" class="card">
+                <h2>Let's Write Your Story! 📝</h2>
+                <form id="story-form">
+                    <div class="form-group">
+                        <label for="child-name">What's your name?</label>
+                        <input type="text" id="child-name" placeholder="Enter your name" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="creature">Choose your magical creature:</label>
+                        <select id="creature" required>
+                            <option value="dragon">🐉 Friendly Dragon</option>
+                            <option value="unicorn">🦄 Magic Unicorn</option>
+                            <option value="wizard">🧙 Young Wizard</option>
+                            <option value="fairy">🧚 Forest Fairy</option>
+                            <option value="mermaid">🧜 Ocean Mermaid</option>
+                            <option value="phoenix">🔥 Phoenix Bird</option>
+                            <option value="elf">🧝 Forest Elf</option>
+                            <option value="gryphon">🦅 Gryphon</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="setting">Where should the adventure take place?</label>
+                        <select id="setting" required>
+                            <option value="enchanted forest">🌲 Enchanted Forest</option>
+                            <option value="magical castle">🏰 Magic Castle</option>
+                            <option value="cloud kingdom">☁️ Cloud Kingdom</option>
+                            <option value="underwater palace">🌊 Underwater Palace</option>
+                            <option value="dragon's mountain cave">⛰️ Dragon's Mountain</option>
+                            <option value="fairy village">🏘️ Fairy Village</option>
+                            <option value="starry space realm">✨ Starry Space</option>
+                            <option value="ancient temple">🏛️ Ancient Temple</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="pages">How many pages?</label>
+                        <select id="pages">
+                            <option value="3">3 pages (Short adventure)</option>
+                            <option value="4" selected>4 pages (Medium adventure)</option>
+                            <option value="5">5 pages (Long adventure)</option>
+                        </select>
+                    </div>
+
+                    <button type="submit" class="btn-generate">
+                        <span class="btn-icon">✨</span> Create My Story!
+                    </button>
+                </form>
+            </div>
+
+            <!-- Loading State -->
+            <div id="loading-section" class="card hidden">
+                <div class="loader">
+                    <div class="magic-wand">🪄</div>
+                    <p>Creating your magical story...</p>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progress-fill"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Story Display -->
+            <div id="story-section" class="card hidden">
+                <div class="story-header">
+                    <h2 id="story-title">Your Adventure Awaits!</h2>
+                </div>
+
+                <div class="story-content">
+                    <div class="illustration-container">
+                        <img id="story-image" src="" alt="Story illustration">
+                        <div class="image-placeholder" id="image-placeholder">
+                            <span>🎨</span>
+                        </div>
+                    </div>
+
+                    <div class="story-text">
+                        <p id="story-text"></p>
+                    </div>
+                </div>
+
+                <div class="story-navigation">
+                    <button id="prev-btn" class="nav-btn" disabled>◀ Previous</button>
+                    <div class="page-indicator">
+                        <span id="current-page">1</span> / <span id="total-pages">4</span>
+                    </div>
+                    <button id="next-btn" class="nav-btn">Next ▶</button>
+                </div>
+
+                <button id="new-story-btn" class="btn-secondary">🎭 Start New Story</button>
+            </div>
+
+            <!-- Error State -->
+            <div id="error-section" class="card hidden">
+                <div class="error-message">
+                    <span class="error-icon">😢</span>
+                    <p>Oh no! Something went wrong creating your story.</p>
+                    <button id="retry-btn" class="btn-secondary">Try Again</button>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>Made with 💖 for little dreamers everywhere</p>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
